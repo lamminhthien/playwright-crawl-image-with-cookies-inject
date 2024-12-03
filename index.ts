@@ -12,34 +12,11 @@ interface ImageData {
 
 const SEARCH_TERMS = [
   "carrot",
-  "melon",
-  "tomato",
-  "perper",
-  "kubis",
-  "banana",
-  "oil_palm",
-  "coffee",
-  "cereals",
-  "cabbage",
-  "cabai",
-  "kelap_sawit",
-  "cucumber",
-  "cotton",
-  "potato",
-  "cauliflower",
-  "rice",
-  "jeruk",
-  "soybean",
-  "spinach",
-  "citrus",
-  "sugarcane",
-  "strawberry",
-  "grapes_and_vines",
   "apple",
 ];
 
 const CONFIG = {
-  url: "example",
+  url: "https://example.com/point/en/aabc/component/default/137133",
   maxLoadAttempts: 10,
   waitTimeout: 2000,
   cookies: cookiesConfig.cookies,
@@ -59,32 +36,14 @@ class PageHandler {
   private setupNetworkCapture() {
     this.page.on("response", async (response) => {
       const url = response.url();
-      if (url.startsWith("https://test.example.com/fr/gallery")) {
+      if (url.startsWith("https://example.com/fr/gallery")) {
         this.networkRequests.push(url);
-        try {
-          const buffer = await response.body();
-          const saveDir = `./${this.searchTerm}_images`;
-
-          if (!fs.existsSync(saveDir)) {
-            fs.mkdirSync(saveDir);
-          }
-
-          const imageCount = fs.readdirSync(saveDir).length + 1;
-          const fileName = `${this.searchTerm}-${imageCount}.png`;
-
-          fs.writeFileSync(path.join(saveDir, fileName), buffer);
-          console.log(`Captured: ${fileName}`);
-        } catch (err) {
-          console.error(`Failed to save: ${url}`, err);
-        }
       }
     });
   }
 
   async waitForNewContent(): Promise<void> {
-    await this.page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {
-      console.log("Network idle timeout");
-    });
+    await this.page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => console.log("Network idle timeout"));
 
     await this.page.waitForFunction(() => {
       return new Promise((resolve) => {
@@ -163,6 +122,55 @@ class PageHandler {
   }
 }
 
+class ImageDownloader {
+  static async downloadImage(url: string, filePath: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      https.get(url, (res) => {
+        if (res.statusCode === 200) {
+          res
+            .pipe(fs.createWriteStream(filePath))
+            .on("error", reject)
+            .once("close", () => resolve());
+        } else {
+          res.resume();
+          reject(new Error(`Request Failed: ${res.statusCode}`));
+        }
+      });
+    });
+  }
+
+  static async downloadAllImages(): Promise<void> {
+    for (const term of SEARCH_TERMS) {
+      const urlsFile = `captured_urls_${term}.json`;
+      if (!fs.existsSync(urlsFile)) {
+        console.log(`No URLs file found for ${term}`);
+        continue;
+      }
+
+      const urls = JSON.parse(fs.readFileSync(urlsFile, "utf-8"));
+      const saveDir = `./${term}_images`;
+
+      if (!fs.existsSync(saveDir)) {
+        fs.mkdirSync(saveDir);
+      }
+
+      console.log(`Downloading ${urls.length} images for ${term}`);
+      for (let i = 0; i < urls.length; i++) {
+        const fileName = `${term}-${i + 1}.png`;
+        const filePath = path.join(saveDir, fileName);
+
+        try {
+          await this.downloadImage(urls[i], filePath);
+          console.log(`Downloaded: ${fileName}`);
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        } catch (err) {
+          console.error(`Failed to download ${fileName}:`, err);
+        }
+      }
+    }
+  }
+}
+
 class ImageScraper {
   static async initialize() {
     const browser = await firefox.launch({
@@ -178,11 +186,11 @@ class ImageScraper {
     const page = await context.newPage();
 
     try {
+      // First collect all URLs
       for (const searchTerm of SEARCH_TERMS) {
-        console.log(`Processing: ${searchTerm}`);
+        console.log(`Collecting URLs for: ${searchTerm}`);
         const pageHandler = new PageHandler(page, searchTerm);
 
-        // Reload page before each search
         await page.goto(CONFIG.url, { waitUntil: "networkidle" });
         await page.waitForLoadState("domcontentloaded");
 
@@ -191,12 +199,18 @@ class ImageScraper {
         await page.waitForTimeout(2000);
       }
 
-      await new Promise(() => {});
+      console.log("URL collection completed. Starting image downloads...");
+      await ImageDownloader.downloadAllImages();
+
+      console.log("All downloads completed!");
+      await browser.close();
     } catch (error) {
       console.error("Error:", error);
+      await browser.close();
       process.exit(1);
     }
   }
 }
 
+// Run the scraper
 ImageScraper.run();
