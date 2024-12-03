@@ -1,0 +1,28 @@
+{
+  "name": "multi-instance",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "nodemon index.ts",
+    "start-contest-en": "nodemon index-contest-en.ts",
+    "start-contest-vi": "nodemon index-contest-vi.ts"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@faker-js/faker": "^8.4.1",
+    "@playwright/test": "^1.39.0",
+    "faker": "^6.6.6",
+    "fs": "^0.0.1-security",
+    "https": "^1.0.0",
+    "nodemon": "^3.0.1",
+    "path": "^0.12.7",
+    "playwright": "^1.39.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.2.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1"
+  }
+}
