@@ -1,0 +1,11 @@
+{
+    "cookies": [
+      {
+        "name": "nss",
+        "value": "1",
+        "domain": ".example.com",
+        "path": "/"
+      },
+    ]
+   }
+  

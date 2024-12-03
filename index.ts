@@ -2,6 +2,11 @@ import { firefox, Page } from "playwright";
 import fs from "fs";
 import path from "path";
 import https from "https";
+import dotenv from "dotenv";
+
+// Load environment variables
+dotenv.config();
+
 const cookiesConfig = JSON.parse(fs.readFileSync("./cookies.json", "utf-8"));
 
 interface ImageData {
@@ -16,11 +21,32 @@ const SEARCH_TERMS = [
 ];
 
 const CONFIG = {
-  url: "https://example.com/point/en/aabc/component/default/137133",
+  url: process.env.BASE_URL,
   maxLoadAttempts: 10,
   waitTimeout: 2000,
   cookies: cookiesConfig.cookies,
 };
+
+// Initialize required directories
+function initializeDirectories(): void {
+  const directories = ['output', 'images'];
+  
+  directories.forEach(dir => {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir);
+      console.log(`Created ${dir} directory`);
+    }
+  });
+  
+  // Create image subdirectories for each search term
+  SEARCH_TERMS.forEach(term => {
+    const imageDir = `./images/images_${term}`;
+    if (!fs.existsSync(imageDir)) {
+      fs.mkdirSync(imageDir, { recursive: true });
+      console.log(`Created directory: ${imageDir}`);
+    }
+  });
+}
 
 class PageHandler {
   private page: Page;
@@ -36,7 +62,7 @@ class PageHandler {
   private setupNetworkCapture() {
     this.page.on("response", async (response) => {
       const url = response.url();
-      if (url.startsWith("https://example.com/fr/gallery")) {
+      if (url.startsWith(process.env.GALLERY_URL_PREFIX)) {
         this.networkRequests.push(url);
       }
     });
@@ -116,7 +142,7 @@ class PageHandler {
     }
 
     fs.writeFileSync(
-      `captured_urls_${this.searchTerm}.json`,
+      `output/captured_urls_${this.searchTerm}.json`,
       JSON.stringify([...new Set(this.networkRequests)], null, 2)
     );
   }
@@ -141,18 +167,14 @@ class ImageDownloader {
 
   static async downloadAllImages(): Promise<void> {
     for (const term of SEARCH_TERMS) {
-      const urlsFile = `captured_urls_${term}.json`;
+      const urlsFile = `output/captured_urls_${term}.json`;
       if (!fs.existsSync(urlsFile)) {
         console.log(`No URLs file found for ${term}`);
         continue;
       }
 
       const urls = JSON.parse(fs.readFileSync(urlsFile, "utf-8"));
-      const saveDir = `./${term}_images`;
-
-      if (!fs.existsSync(saveDir)) {
-        fs.mkdirSync(saveDir);
-      }
+      const saveDir = `./images/images_${term}`;
 
       console.log(`Downloading ${urls.length} images for ${term}`);
       for (let i = 0; i < urls.length; i++) {
@@ -182,6 +204,9 @@ class ImageScraper {
   }
 
   static async run(): Promise<void> {
+    // Initialize directories before starting
+    initializeDirectories();
+    
     const { browser, context } = await this.initialize();
     const page = await context.newPage();
 
